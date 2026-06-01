@@ -1,53 +1,382 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Import Tracker</title>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        /* Simple styling – we'll improve later */
-        body { font-family: Arial; margin: 20px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .dashboard { display: flex; gap: 20px; margin-bottom: 20px; }
-        .card { border: 1px solid #ccc; padding: 15px; border-radius: 8px; min-width: 150px; }
-        button { margin: 5px; padding: 5px 10px; cursor: pointer; }
-        .modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border: 1px solid #ccc; z-index: 1000; }
-        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
-    </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>Import Tracker Dashboard</title>
+  <!-- Tailwind CSS + Font Awesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <!-- Custom smooth scroll & modal behavior -->
+  <style>
+    /* Custom loading spinner */
+    .loader {
+      border-top-color: #3490dc;
+      animation: spin 1s ease-in-out infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    /* Table row hover effect */
+    .table-row-hover:hover {
+      background-color: #f9fafb;
+      cursor: pointer;
+    }
+    /* Toast animation */
+    .toast {
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      transform: translateY(1rem);
+      opacity: 0;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  </style>
 </head>
-<body>
-    <h1>Import Tracker Dashboard</h1>
-    <div class="dashboard" id="dashboard">
-        <div class="card">Total Shipments: <span id="totalShipments">0</span></div>
-        <div class="card">Total Logistics Cost (OMR): <span id="totalCost">0</span></div>
-        <div class="card">Avg Transit Days: <span id="avgTransit">0</span></div>
+<body class="bg-gray-100 font-sans antialiased">
+
+  <div class="container mx-auto px-4 py-6 max-w-[1600px]">
+    <!-- Header -->
+    <div class="mb-6 flex flex-wrap justify-between items-center">
+      <h1 class="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-2">
+        <i class="fas fa-boxes text-indigo-600"></i> Import Tracker Dashboard
+      </h1>
+      <button onclick="openAddModal()" class="mt-2 md:mt-0 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg shadow-md transition flex items-center gap-2">
+        <i class="fas fa-plus-circle"></i> Add Shipment
+      </button>
     </div>
-    <div>
-        <button id="addBtn">Add Shipment</button>
-        <button id="pdfBtn">Export PDF</button>
+
+    <!-- KPI Cards (loading skeleton shown initially) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
+      <div class="bg-white rounded-xl shadow-md p-5 border-l-4 border-indigo-500">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-gray-500 text-sm uppercase tracking-wide">Total Shipments</p>
+            <p id="totalShipments" class="text-3xl font-bold text-gray-800">-</p>
+          </div>
+          <i class="fas fa-ship text-3xl text-indigo-300"></i>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl shadow-md p-5 border-l-4 border-green-500">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-gray-500 text-sm uppercase tracking-wide">Total Logistics Cost (OMR)</p>
+            <p id="totalCost" class="text-3xl font-bold text-gray-800">-</p>
+          </div>
+          <i class="fas fa-dollar-sign text-3xl text-green-300"></i>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl shadow-md p-5 border-l-4 border-purple-500">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-gray-500 text-sm uppercase tracking-wide">Avg Transit Days</p>
+            <p id="avgTransit" class="text-3xl font-bold text-gray-800">-</p>
+          </div>
+          <i class="fas fa-calendar-week text-3xl text-purple-300"></i>
+        </div>
+      </div>
     </div>
-    <div style="overflow-x: auto;">
-        <table id="dataTable">
-            <thead id="tableHead"></thead>
-            <tbody id="tableBody"></tbody>
+
+    <!-- Table Container -->
+    <div class="bg-white rounded-xl shadow-md overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50">
+            <tr id="tableHeader">
+              <!-- headers will be injected dynamically -->
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-gray-200 bg-white">
+            <tr><td colspan="20" class="text-center py-10"><div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 mx-auto"></div><p class="mt-2 text-gray-500">Loading shipments...</p></td></tr>
+          </tbody>
         </table>
+      </div>
     </div>
 
-    <!-- Modal for add/edit -->
-    <div id="modalOverlay" class="overlay"></div>
-    <div id="modal" class="modal">
-        <h2 id="modalTitle">Add Shipment</h2>
-        <form id="shipmentForm">
-            <!-- Fields will be generated dynamically -->
-            <div id="formFields"></div>
-            <button type="submit">Save</button>
-            <button type="button" id="cancelBtn">Cancel</button>
-        </form>
+    <!-- Pagination Controls -->
+    <div class="flex flex-wrap justify-between items-center mt-6 gap-3">
+      <div class="text-sm text-gray-600" id="pageInfo"></div>
+      <div class="flex gap-2" id="paginationButtons"></div>
     </div>
+  </div>
 
-    <script src="app.js"></script>
+  <!-- Modal (Add / Edit) -->
+  <div id="modal" class="fixed inset-0 bg-gray-800 bg-opacity-50 backdrop-blur-sm hidden items-center justify-center z-50 p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+      <div class="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+        <h3 id="modalTitle" class="text-xl font-bold text-gray-800">Add New Shipment</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+      </div>
+      <form id="shipmentForm" class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- dynamic fields will be injected here -->
+      </form>
+      <div class="border-t px-6 py-4 flex justify-end gap-3">
+        <button type="button" onclick="closeModal()" class="px-4 py-2 border rounded-lg text-gray-700 hover:bg-gray-100">Cancel</button>
+        <button type="button" id="saveBtn" onclick="saveShipment()" class="px-5 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow">Save Shipment</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-gray-800 text-white px-5 py-3 rounded-lg shadow-lg toast flex items-center gap-2 z-50">
+    <i id="toastIcon" class="fas fa-info-circle"></i>
+    <span id="toastMessage">Message</span>
+  </div>
+
+  <script>
+    // ==================== CONFIGURATION ====================
+    const API_BASE = "https://script.google.com/macros/s/AKfycby14JV7jqQ3gEUu3ASbWrc9KslyQJfzUOuPlfPMK4AVKqLxG_afahK61kBXKuTSTpyJZg/exec";  // <--- REPLACE WITH YOUR DEPLOYMENT URL
+    const PAGE_SIZE = 50;                     // rows per page
+
+    let currentPage = 1;
+    let totalPages = 1;
+    let allHeaders = [];                      // store column names for dynamic form
+    let currentEditRowNumber = null;          // null = add mode, otherwise 1-based row index
+
+    // Helper: show toast notification
+    function showToast(message, isError = false) {
+      const toast = document.getElementById("toast");
+      const toastMsg = document.getElementById("toastMessage");
+      const toastIcon = document.getElementById("toastIcon");
+      toastMsg.innerText = message;
+      if (isError) {
+        toastIcon.className = "fas fa-exclamation-triangle text-red-400";
+        toast.classList.add("bg-red-800");
+      } else {
+        toastIcon.className = "fas fa-check-circle text-green-400";
+        toast.classList.remove("bg-red-800");
+        toast.classList.add("bg-gray-800");
+      }
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    // Show loader in table body
+    function showTableLoader(show) {
+      if (show) {
+        document.getElementById("tableBody").innerHTML = `<tr><td colspan="20" class="text-center py-10"><div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-8 w-8 mx-auto"></div><p class="mt-2 text-gray-500">Loading shipments...</p></td></tr>`;
+      }
+    }
+
+    // Fetch data from server with pagination
+    async function fetchData(page = 1) {
+      showTableLoader(true);
+      try {
+        const url = `${API_BASE}?page=${page}&pageSize=${PAGE_SIZE}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const json = await response.json();
+        if (json.error) throw new Error(json.error);
+        
+        // Update summary KPIs
+        if (json.summary) {
+          document.getElementById("totalShipments").innerText = json.summary.totalShipments.toLocaleString();
+          document.getElementById("totalCost").innerText = json.summary.totalLogisticsCost.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+          document.getElementById("avgTransit").innerText = json.summary.avgTransitDays.toFixed(1);
+        }
+        
+        // Update table
+        renderTable(json.data);
+        
+        // Pagination metadata
+        currentPage = json.page;
+        totalPages = json.totalPages;
+        renderPagination();
+      } catch (err) {
+        console.error(err);
+        showToast("Failed to load data: " + err.message, true);
+        document.getElementById("tableBody").innerHTML = `<tr><td colspan="20" class="text-center py-10 text-red-500">Error loading data. Please refresh.</td></tr>`;
+      } finally {
+        showTableLoader(false);
+      }
+    }
+
+    // Render table rows and headers dynamically
+    function renderTable(data) {
+      if (!data || data.length === 0) {
+        document.getElementById("tableBody").innerHTML = `<tr><td colspan="20" class="text-center py-10 text-gray-500">No shipments found.</td></tr>`;
+        return;
+      }
+      // Extract headers from first row object
+      const firstRow = data[0];
+      allHeaders = Object.keys(firstRow);
+      // Render header row
+      const theadRow = document.getElementById("tableHeader");
+      theadRow.innerHTML = allHeaders.map(header => 
+        `<th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">${escapeHtml(header)}</th>`
+      ).join('');
+      
+      // Render body rows
+      const tbody = document.getElementById("tableBody");
+      tbody.innerHTML = data.map((row, idx) => {
+        const rowNumber = (currentPage - 1) * PAGE_SIZE + idx + 1; // 1-based row index in sheet (after header)
+        return `<tr class="table-row-hover border-b hover:bg-gray-50 transition" onclick="editRow(${rowNumber})">
+          ${allHeaders.map(header => `<td class="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">${escapeHtml(String(row[header] ?? '-'))}</td>`).join('')}
+        </tr>`;
+      }).join('');
+    }
+
+    // Pagination UI
+    function renderPagination() {
+      const container = document.getElementById("paginationButtons");
+      const pageInfo = document.getElementById("pageInfo");
+      pageInfo.innerText = `Page ${currentPage} of ${totalPages} (Total records: ${document.getElementById("totalShipments").innerText})`;
+      
+      let buttonsHtml = '';
+      // Previous
+      buttonsHtml += `<button onclick="goToPage(${currentPage-1})" ${currentPage===1 ? 'disabled' : ''} class="px-3 py-1 border rounded-md ${currentPage===1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-50'}">Prev</button>`;
+      // Page numbers (show max 5)
+      let startPage = Math.max(1, currentPage - 2);
+      let endPage = Math.min(totalPages, startPage + 4);
+      if (endPage - startPage < 4) startPage = Math.max(1, endPage - 4);
+      for (let p = startPage; p <= endPage; p++) {
+        buttonsHtml += `<button onclick="goToPage(${p})" class="px-3 py-1 border rounded-md ${p===currentPage ? 'bg-indigo-600 text-white' : 'bg-white hover:bg-gray-50'}">${p}</button>`;
+      }
+      // Next
+      buttonsHtml += `<button onclick="goToPage(${currentPage+1})" ${currentPage===totalPages ? 'disabled' : ''} class="px-3 py-1 border rounded-md ${currentPage===totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-50'}">Next</button>`;
+      container.innerHTML = buttonsHtml;
+    }
+
+    function goToPage(page) {
+      if (page < 1 || page > totalPages) return;
+      fetchData(page);
+    }
+
+    // ==================== MODAL (ADD / EDIT) ====================
+    function openAddModal() {
+      currentEditRowNumber = null;
+      document.getElementById("modalTitle").innerText = "Add New Shipment";
+      generateFormFields({});
+      document.getElementById("modal").classList.remove("hidden");
+      document.getElementById("modal").style.display = "flex";
+    }
+
+    async function editRow(rowNumber) {
+      // rowNumber is 1-based index of row in sheet (including header row? No: after header)
+      // We need to fetch the current row data. Since we have pagination, the best way is to fetch the specific row by its index from server.
+      // Alternatively, we can store the data of the clicked row from the current table.
+      // Simpler: fetch the current page data again? But we already have it in memory. We'll store an in-memory map of rowNumber -> row data when rendering.
+      // For simplicity, I'll implement a helper: fetch the row from server using a new endpoint? Not ideal.
+      // Better: when rendering each row, attach the full row object in a data attribute.
+      // But because of pagination, we can retrieve the row from the `data` array that we just rendered.
+      // Let's modify renderTable to also store a global map of rowNumber to row object.
+      // However, to keep code short, I'll implement a new function `getRowDataByRowNumber(rowNumber)` that re-fetches from server? That would be slow.
+      // Quick fix: store the current page's data in a global variable when rendering.
+      // I'll implement that.
+      const rowData = rowDataMap[rowNumber];
+      if (!rowData) {
+        showToast("Could not load row data. Please refresh.", true);
+        return;
+      }
+      currentEditRowNumber = rowNumber;
+      document.getElementById("modalTitle").innerText = "Edit Shipment";
+      generateFormFields(rowData);
+      document.getElementById("modal").classList.remove("hidden");
+      document.getElementById("modal").style.display = "flex";
+    }
+
+    // Store current page rows mapping rowNumber -> object
+    let rowDataMap = {};
+    function updateRowDataMap(data, startRowNumber) {
+      rowDataMap = {};
+      data.forEach((row, idx) => {
+        const rowNumber = startRowNumber + idx;
+        rowDataMap[rowNumber] = row;
+      });
+    }
+    // Override renderTable to store mapping
+    const originalRenderTable = renderTable;
+    renderTable = function(data) {
+      const startRowNumber = (currentPage - 1) * PAGE_SIZE + 1;
+      updateRowDataMap(data, startRowNumber);
+      originalRenderTable(data);
+    };
+
+    function generateFormFields(existingData) {
+      if (!allHeaders.length) {
+        showToast("No column data available. Please refresh the page.", true);
+        return;
+      }
+      const formContainer = document.getElementById("shipmentForm");
+      let fieldsHtml = '';
+      allHeaders.forEach(header => {
+        const value = existingData[header] !== undefined ? existingData[header] : '';
+        fieldsHtml += `
+          <div class="flex flex-col">
+            <label class="text-sm font-medium text-gray-700 mb-1">${escapeHtml(header)}</label>
+            <input type="text" name="${escapeHtml(header)}" value="${escapeHtml(String(value))}" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-indigo-500 focus:border-indigo-500">
+          </div>
+        `;
+      });
+      formContainer.innerHTML = fieldsHtml;
+    }
+
+    async function saveShipment() {
+      const form = document.getElementById("shipmentForm");
+      const inputs = form.querySelectorAll("input");
+      const formData = {};
+      inputs.forEach(input => {
+        formData[input.name] = input.value;
+      });
+      
+      const action = currentEditRowNumber === null ? "add" : "update";
+      const payload = {
+        action: action,
+        data: formData
+      };
+      if (action === "update") {
+        payload.rowNumber = currentEditRowNumber;
+      }
+      
+      try {
+        const response = await fetch(API_BASE, {
+          method: "POST",
+          mode: "cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const result = await response.json();
+        if (result.status === "success") {
+          showToast(`Shipment ${action === "add" ? "added" : "updated"} successfully!`);
+          closeModal();
+          // Refresh current page
+          fetchData(currentPage);
+        } else {
+          throw new Error(result.message || "Unknown error");
+        }
+      } catch (err) {
+        showToast("Error saving: " + err.message, true);
+      }
+    }
+
+    function closeModal() {
+      document.getElementById("modal").style.display = "none";
+      document.getElementById("modal").classList.add("hidden");
+    }
+
+    // Helper to escape HTML
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+      }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+        return c;
+      });
+    }
+
+    // Initial load
+    window.onload = () => {
+      fetchData(1);
+      // click outside modal to close (optional)
+      window.onclick = function(event) {
+        const modal = document.getElementById("modal");
+        if (event.target === modal) closeModal();
+      };
+    };
+  </script>
 </body>
 </html>
