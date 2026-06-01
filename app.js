@@ -147,6 +147,6 @@ window.onload = () => {
 };
 
 function exportToPDF() {
-    // We'll implement using html2pdf library later
-    alert("PDF export will be added in next phase");
+    const element = document.getElementById("dataTable");
+    html2pdf().from(element).save();
 }
