@@ -1,5 +1,5 @@
 // ---------- CONFIGURATION ----------
-const API_URL = "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec"; // REPLACE WITH YOUR URL
+const API_URL = "https://script.google.com/macros/s/AKfycby14JV7jqQ3gEUu3ASbWrc9KslyQJfzUOuPlfPMK4AVKqLxG_afahK61kBXKuTSTpyJZg/exec"; // REPLACE WITH YOUR URL
 let shipments = [];       // will hold all shipment objects
 let tableHeaders = [];    // column names
 let editingRowNumber = null;  // for update
@@ -41,14 +41,24 @@ function calculateTransitDays(etd, eta) {
 // You will continue adding other formulas similarly.
 
 async function fetchData() {
-    const response = await fetch(API_URL);
+  try {
+    const response = await fetch(API_URL, {
+      method: 'GET',
+      mode: 'cors',  // or omit this line (default is cors)
+      headers: { 'Accept': 'application/json' }
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
     shipments = data;
     if (shipments.length > 0) {
-        tableHeaders = Object.keys(shipments[0]);
-        renderTable();
-        updateDashboard();
+      tableHeaders = Object.keys(shipments[0]);
+      renderTable();
+      updateDashboard();
     }
+  } catch (error) {
+    console.error("Fetch error:", error);
+    alert("Failed to load data. Check console for details.");
+  }
 }
 
 function renderTable() {
@@ -81,19 +91,22 @@ function updateDashboard() {
 
 // Edit, Delete, Add functions will call the API using POST
 async function addOrUpdateShipment(data, action, rowNumber = null) {
-    const payload = {
-        action: action,
-        data: data,
-        rowNumber: rowNumber
-    };
+  const payload = { action, data, rowNumber };
+  try {
     const response = await fetch(API_URL, {
-        method: "POST",
-        mode: "no-cors", // simplified for testing; you may need to adjust
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+      method: "POST",
+      mode: "cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     });
-    // After success, refresh data
-    fetchData();
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const result = await response.json();
+    console.log(result);
+    fetchData(); // refresh
+  } catch (error) {
+    console.error("Save error:", error);
+    alert("Failed to save. Check console.");
+  }
 }
 
 // Show modal with form fields
